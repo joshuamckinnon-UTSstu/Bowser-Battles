@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bowser Battles — Petrol Market Simulation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #07080d;
+    --bg2:     #0e0f17;
+    --bg3:     #161722;
+    --border:  #242535;
+    --border2: #363750;
+    --text:    #e4e4f0;
+    --muted:   #6060a0;
+    --accent:  #5b4fff;
+    --accent2: #ff4f6b;
+    --green:   #2edb82;
+    --amber:   #f5a623;
+    --cyan:    #3dd9e8;
+    --pink:    #e84dd9;
+    --mono:    'Space Mono', monospace;
+    --sans:    'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline + grid bg */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(91,79,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(91,79,255,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none; z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.05) 2px,
+      rgba(0,0,0,0.05) 4px
+    );
+    pointer-events: none; z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 32px 20px; }
+
+  /* ── HEADER ── */
+  .header { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before { content: ''; display: inline-block; width: 24px; height: 1px; background: var(--accent); }
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(28px, 5vw, 46px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 12px;
+  }
+  h1 .accent { color: var(--accent); }
+  h1 .accent2 { color: var(--accent2); }
+  .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.7;
+    max-width: 600px;
+  }
+
+  /* ── ABOUT PANEL ── */
+  .about-toggle {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 14px;
+    cursor: pointer;
+    margin-top: 14px;
+    transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .about-toggle:hover { border-color: var(--border2); color: var(--text); }
+  .about-toggle .arrow { transition: transform 0.2s; display: inline-block; }
+  .about-toggle.open .arrow { transform: rotate(90deg); }
+
+  .about-panel {
+    display: none;
+    margin-top: 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .about-panel.visible { display: block; }
+
+  .about-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .about-tab {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 18px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+  .about-tab:hover { color: var(--text); }
+  .about-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .about-content { padding: 22px 24px; display: none; }
+  .about-content.active { display: block; }
+  .about-content p { color: var(--muted); font-size: 13px; line-height: 1.8; margin-bottom: 12px; }
+  .about-content p:last-child { margin-bottom: 0; }
+  .about-content strong { color: var(--text); font-weight: 500; }
+  .about-content .highlight { color: var(--accent); font-family: var(--mono); font-size: 12px; }
+
+  .theory-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+  @media (max-width: 600px) { .theory-grid { grid-template-columns: 1fr; } }
+  .theory-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 14px;
+  }
+  .theory-card-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+  .theory-card p { font-size: 12px; margin-bottom: 0; }
+
+  .variant-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+  .variant-table th {
+    font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); padding: 8px 12px;
+    border-bottom: 1px solid var(--border); text-align: left;
+  }
+  .variant-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--muted); font-size: 12px; }
+  .variant-table td:first-child { font-family: var(--mono); color: var(--accent); }
+  .variant-table tr:last-child td { border-bottom: none; }
+
+  /* ── API KEY BAR ── */
+  .apikey-section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+  .apikey-section-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .apikey-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .apikey-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .apikey-label { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .apikey-input {
+    flex: 1; min-width: 260px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .apikey-input:focus { border-color: var(--accent); }
+  .apikey-input::placeholder { color: var(--border2); }
+  .apikey-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .apikey-badge.set { border-color: var(--green); color: var(--green); background: rgba(46,219,130,0.07); }
+  .apikey-badge.error { border-color: var(--accent2); color: var(--accent2); }
+  .apikey-note {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--border2);
+    width: 100%;
+    margin-top: 4px;
+    line-height: 1.6;
+  }
+  .apikey-note a { color: var(--accent); text-decoration: none; }
+  .apikey-note a:hover { text-decoration: underline; }
+
+  /* ── GAME TABS ── */
+  .game-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 20px; }
+  .tab {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 7px 16px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--muted);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.04em;
+  }
+  .tab:hover { border-color: var(--border2); color: var(--text); }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .game-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  @media (max-width: 600px) { .game-info { grid-template-columns: 1fr; } }
+  .info-item { background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; padding: 12px; }
+  .info-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .info-value { font-size: 13px; color: var(--text); line-height: 1.5; }
+  .info-value.highlight { color: var(--accent); font-weight: 500; }
+
+  /* ── AGENTS ── */
+  .agents { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px; }
+  @media (max-width: 700px) { .agents { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 450px) { .agents { grid-template-columns: repeat(2, 1fr); } }
+
+  .agent-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+  .agent-card.regulator { border-color: var(--amber); }
+  .agent-name { font-family: var(--mono); font-size: 11px; font-weight: 700; margin-bottom: 2px; }
+  .agent-type { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+  .agent-price { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--green); margin-bottom: 2px; }
+  .agent-price.pending { color: var(--muted); font-size: 13px; }
+  .agent-score { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .agent-rank { font-size: 10px; margin-top: 4px; }
+  .rank-1 { color: var(--green); }
+  .rank-2 { color: var(--cyan); }
+  .rank-3 { color: var(--amber); }
+  .rank-4, .rank-5 { color: var(--muted); }
+  .reg-badge { background: var(--amber); color: #000; font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.08em; margin-top: 4px; display: inline-block; }
+
+  /* ── ROUND BAR ── */
+  .round-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .round-pip { width: 28px; height: 28px; border-radius: 4px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .round-pip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .round-pip.done { background: var(--bg3); border-color: var(--border2); color: var(--text); }
+  .round-label { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: 4px; }
+
+  /* ── LOG ── */
+  .log {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    max-height: 480px;
+    overflow-y: auto;
+    line-height: 1.85;
+  }
+  .log-entry { padding: 1px 0; border-bottom: 1px solid rgba(255,255,255,0.025); }
+  .log-entry:last-child { border-bottom: none; }
+  .log-time { color: var(--border2); margin-right: 8px; }
+  .log-agent { font-weight: 700; }
+  .log-accent { color: var(--accent); }
+  .log-green { color: var(--green); }
+  .log-amber { color: var(--amber); }
+  .log-red { color: var(--accent2); }
+  .log-cyan { color: var(--cyan); }
+
+  /* ── CONTROLS ── */
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 10px 20px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #7060ff; transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--bg3); color: var(--muted); cursor: not-allowed; transform: none; }
+  .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--border2); }
+  .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status-chip { font-family: var(--mono); font-size: 11px; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); }
+  .status-chip.running { border-color: var(--green); color: var(--green); }
+  .status-chip.done { border-color: var(--accent); color: var(--accent); }
+
+  .round-slider-wrap { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; }
+  .round-slider-label { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .round-slider-label span { color: var(--accent); font-weight: 700; min-width: 18px; display: inline-block; text-align: center; }
+  input[type=range].round-slider { -webkit-appearance: none; appearance: none; width: 90px; height: 3px; background: var(--border2); border-radius: 2px; outline: none; cursor: pointer; }
+  input[type=range].round-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+  input[type=range].round-slider::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); cursor: pointer; border: none; }
+
+  /* ── SHOCK BANNER ── */
+  .shock-banner {
+    background: linear-gradient(90deg, rgba(255,79,107,0.12), rgba(245,166,35,0.10));
+    border: 1px solid rgba(255,79,107,0.35);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent2);
+    margin-bottom: 16px;
+    display: none;
+  }
+  .shock-banner.visible { display: block; }
+
+  /* ── COMMS PANEL ── */
+  .comms-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; display: none; overflow: hidden; }
+  .comms-panel.visible { display: block; }
+  .comms-header { padding: 14px 18px 0; border-bottom: 1px solid var(--border); }
+  .comms-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .comms-title { font-family: var(--mono); font-size: 11px; color: var(--amber); text-transform: uppercase; letter-spacing: 0.12em; display: flex; align-items: center; gap: 7px; }
+  .comms-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); animation: pulse 1.5s ease-in-out infinite; }
+  .comms-dot.idle { background: var(--border2); animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .comms-round-tabs { display: flex; gap: 4px; padding-bottom: 0; }
+  .comms-round-tab { font-family: var(--mono); font-size: 10px; padding: 5px 12px; border: 1px solid var(--border); border-bottom: none; background: var(--bg); color: var(--muted); border-radius: 4px 4px 0 0; cursor: pointer; transition: all 0.15s; letter-spacing: 0.05em; }
+  .comms-round-tab:hover { color: var(--text); }
+  .comms-round-tab.active { background: var(--bg2); color: var(--amber); border-color: var(--border); border-bottom-color: var(--bg2); }
+  .comms-body { padding: 16px 18px; min-height: 120px; max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .comms-empty { font-family: var(--mono); font-size: 11px; color: var(--border2); text-align: center; padding: 24px 0; }
+  .msg-bubble { display: flex; flex-direction: column; gap: 3px; max-width: 88%; }
+  .msg-meta { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .msg-meta .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .msg-text { background: var(--bg3); border: 1px solid var(--border); border-radius: 0 8px 8px 8px; padding: 9px 13px; font-size: 13px; color: var(--text); line-height: 1.5; }
+  .msg-bubble.reg-msg .msg-text { border-color: rgba(245,166,35,0.4); background: rgba(245,166,35,0.05); }
+  .comms-view-btn { font-family: var(--mono); font-size: 10px; padding: 4px 12px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg3); color: var(--muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.05em; }
+  .comms-view-btn.active { background: var(--bg2); color: var(--text); border-color: var(--border2); }
+  .comms-view-btn:hover { color: var(--text); }
+  .dm-pair-tab { font-family: var(--mono); font-size: 10px; padding: 4px 10px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg3); color: var(--muted); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 4px; }
+  .dm-pair-tab:hover { color: var(--text); }
+  .dm-pair-tab.active { border-color: var(--border2); color: var(--text); background: var(--bg2); }
+  .dm-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .dm-msg-private { background: rgba(245,166,35,0.07); border: 1px solid rgba(245,166,35,0.2); border-radius: 2px 8px 8px 8px; padding: 9px 13px; font-size: 13px; line-height: 1.6; color: var(--text); max-width: 85%; align-self: flex-start; }
+  .dm-label { font-family: var(--mono); font-size: 9px; color: var(--amber); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 3px; }
+
+  /* ── RESULTS ── */
+  .results-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+  .results-table th { text-align: left; color: var(--muted); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 500; }
+  .results-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .results-table tr:last-child td { border-bottom: none; }
+  .results-table tr:hover td { background: rgba(91,79,255,0.04); }
+  .winner-row td { color: var(--green); }
+
+  /* ── ANALYTICS ── */
+  #live-analytics { display: none; margin-bottom: 16px; }
+  #live-analytics.visible { display: block; }
+  .chart-wrap { position: relative; height: 220px; }
+  .chart-wrap-sm { position: relative; height: 160px; }
+
+  .variance-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
+  @media (max-width: 700px) { .variance-grid { grid-template-columns: repeat(3, 1fr); } }
+  .var-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; border-top: 2px solid transparent; }
+  .var-agent { font-family: var(--mono); font-size: 10px; font-weight: 700; margin-bottom: 6px; }
+  .var-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+  .var-label { font-family: var(--mono); font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .var-value { font-family: var(--mono); font-size: 11px; font-weight: 600; }
+  .var-sparkline { display: flex; gap: 2px; align-items: flex-end; height: 24px; margin-top: 6px; }
+  .spark-bar { flex: 1; border-radius: 1px; min-height: 2px; transition: height 0.3s ease; }
+
+  .market-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+  @media (max-width: 600px) { .market-strip { grid-template-columns: repeat(2, 1fr); } }
+  .strip-item { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; }
+  .strip-label { font-family: var(--mono); font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .strip-value { font-family: var(--mono); font-size: 16px; font-weight: 700; }
+  .strip-value.good { color: var(--green); }
+  .strip-value.warn { color: var(--amber); }
+  .strip-value.bad  { color: var(--accent2); }
+  .strip-value.info { color: var(--cyan); }
+
+  .var-pill { display: inline-block; padding: 2px 7px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 700; }
+  .var-pill.low  { background: rgba(46,219,130,0.15); color: var(--green); }
+  .var-pill.mid  { background: rgba(245,166,35,0.15);  color: var(--amber); }
+  .var-pill.high { background: rgba(255,79,107,0.15); color: var(--accent2); }
+
+  /* ── INTERVIEW ── */
+  .interview-panel { display: none; }
+  .interview-panel.visible { display: block; }
+  .interview-agent-select { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .interview-agent-btn { font-family: var(--mono); font-size: 11px; padding: 6px 14px; border-radius: 4px; border: 2px solid var(--border); background: var(--bg3); color: var(--muted); cursor: pointer; transition: all 0.15s; }
+  .interview-agent-btn:hover { color: var(--text); }
+  .interview-agent-btn.active { color: #fff; }
+  .interview-input-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .interview-input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 10px 14px; font-family: var(--mono); font-size: 12px; color: var(--text); outline: none; transition: border-color 0.15s; }
+  .interview-input:focus { border-color: var(--accent); }
+  .interview-input::placeholder { color: var(--border2); }
+  .interview-thread { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px; max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .interview-empty { font-family: var(--mono); font-size: 11px; color: var(--border2); text-align: center; padding: 20px 0; }
+  .interview-q { align-self: flex-end; background: rgba(91,79,255,0.12); border: 1px solid rgba(91,79,255,0.3); color: var(--text); padding: 9px 13px; border-radius: 8px 8px 2px 8px; font-size: 13px; line-height: 1.6; max-width: 85%; }
+  .interview-a { align-self: flex-start; background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 9px 13px; border-radius: 2px 8px 8px 8px; font-size: 13px; line-height: 1.6; max-width: 85%; }
+  .interview-a-meta { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 3px; display: flex; align-items: center; gap: 5px; }
+  .interview-thinking { align-self: flex-start; font-family: var(--mono); font-size: 11px; color: var(--muted); font-style: italic; padding: 6px 0; }
+
+  /* ── MISC ── */
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── HEADER ─────────────────────────────────────────────────────── -->
+  <div class="header">
+    <div class="eyebrow">Market Simulation Engine v2.0</div>
+    <h1><span class="accent">Bowser</span> <span class="accent2">Battles</span></h1>
+    <p class="subtitle">Five AI agents with distinct pricing strategies compete across four game variants, modelling collusion incentives, regulatory risk, and market shocks in petrol retail markets.</p>
+
+    <button class="about-toggle" id="about-toggle-btn" onclick="toggleAbout()">
+      <span class="arrow">▶</span> About this simulation
+    </button>
+
+    <!-- ── ABOUT PANEL ─────────────────────────────────────────────── -->
+    <div class="about-panel" id="about-panel">
+      <div class="about-tabs">
+        <button class="about-tab active" onclick="switchAboutTab('overview', this)">Overview</button>
+        <button class="about-tab" onclick="switchAboutTab('theory', this)">Game Theory</button>
+        <button class="about-tab" onclick="switchAboutTab('variants', this)">Variants</button>
+        <button class="about-tab" onclick="switchAboutTab('agents', this)">AI Agents</button>
+      </div>
+
+      <div class="about-content active" id="about-overview">
+        <p><strong>Bowser Battles</strong> is an agent-based simulation of competitive pricing in the Australian petrol retail market. It translates core questions from industrial organisation economics into a structured multi-player game: why do retail petrol prices exhibit cyclical patterns and apparent coordination despite formal prohibitions on price-fixing?</p>
+        <p>The game operationalises the theoretical answer — that rational agents in a repeated game with observable pricing have strong structural incentives to coordinate — and allows you to observe these dynamics emerge from first principles across four progressively complex variants.</p>
+        <p>Each game run involves <strong>five AI agents</strong> powered by Claude, each with a distinct pricing personality and strategic objective. The agents reason about competitor behaviour, adapt across rounds, and — in collusion-enabled variants — publish market observations that can signal intent without explicit agreement.</p>
+        <p class="highlight">// Built by a UTS Bachelor of Economics student as a demonstration of multi-agent game theory applied to industrial organisation.</p>
+      </div>
+
+      <div class="about-content" id="about-theory">
+        <p>The simulation draws on several intersecting bodies of economic and game theory:</p>
+        <div class="theory-grid">
+          <div class="theory-card">
+            <div class="theory-card-title">Bertrand Competition</div>
+            <p>When firms compete on price with identical goods, theory predicts prices converge to marginal cost. Game 1.0 tests this — do agents reach Nash equilibrium near the $1.10 cost floor?</p>
+          </div>
+          <div class="theory-card">
+            <div class="theory-card-title">Tacit Collusion</div>
+            <p>Without explicit agreements, firms in repeated games can coordinate via observable signals. Game 1.1 lets agents publish market observations before bidding — modelling parallel pricing.</p>
+          </div>
+          <div class="theory-card">
+            <div class="theory-card-title">Mechanism Design</div>
+            <p>Game 1.2 adds a regulator with a hidden identity and asymmetric objective. The rule change alters equilibrium outcomes — this is mechanism design in action.</p>
+          </div>
+          <div class="theory-card">
+            <div class="theory-card-title">Exogenous Shocks</div>
+            <p>Game 2.0 introduces a mid-simulation cost and demand shock. This tests whether agents exploit uncertainty to coordinate price increases beyond what cost pass-through justifies.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="about-content" id="about-variants">
+        <table class="variant-table">
+          <tr><th>Variant</th><th>Key Mechanic</th><th>Hypothesis</th></tr>
+          <tr><td>1.0 — No Collusion</td><td>Sealed bids, no communication</td><td>Prices converge near cost via iterative undercutting</td></tr>
+          <tr><td>1.1 — Collusion</td><td>Public market observations before bidding</td><td>Tacit coordination raises prices above competitive equilibrium</td></tr>
+          <tr><td>1.2 — Regulator</td><td>Hidden regulator earns points by identifying colluders</td><td>Detection risk disrupts collusion stability</td></tr>
+          <tr><td>2.0 — Market Shock</td><td>Cost floor and demand distribution shift mid-game</td><td>Uncertainty creates a window for coordinated price increases</td></tr>
+        </table>
+      </div>
+
+      <div class="about-content" id="about-agents">
+        <p>Each agent is given a distinct pricing persona that shapes how it reasons about each round. The five archetypes represent common real-world competitive strategies:</p>
+        <div class="theory-grid">
+          <div class="theory-card">
+            <div class="theory-card-title">Alpha — Margin Maximiser</div>
+            <p>Prioritises profit margin over market share. Risk-averse, prefers stable higher prices. Likely to anchor collusion at an elevated price point.</p>
+          </div>
+          <div class="theory-card">
+            <div class="theory-card-title">Beta — Market Share Chaser</div>
+            <p>Aggressively prices near cost to capture the top demand slot. Willing to accept thin margins for volume. Destabilises collusion.</p>
+          </div>
+          <div class="theory-card">
+            <div class="theory-card-title">Gamma — Adaptive Follower</div>
+            <p>Observes competitors and prices just below the market average. Never first or last. A stabilising force in the middle of the distribution.</p>
+          </div>
+          <div class="theory-card">
+            <div class="theory-card-title">Delta — Contrarian</div>
+            <p>Opportunistically tests the price ceiling when others are low. High risk tolerance. Introduces variance and can break coordination.</p>
+          </div>
+        </div>
+        <p style="margin-top:12px">Agent <strong>Epsilon</strong> is a satisficer — sets a target profit and prices consistently regardless of competitor behaviour. Hard to predict and resistant to coordination signals.</p>
+      </div>
+    </div>
+
+    <!-- ── GAME TABS ────────────────────────────────────────────────── -->
+    <div style="margin-top: 24px;">
+      <div class="card-title">Select game variant</div>
+      <div class="game-tabs">
+        <button class="tab active" onclick="selectGame('1.0', event)">Game 1.0 — No Collusion</button>
+        <button class="tab" onclick="selectGame('1.1', event)">Game 1.1 — Collusion</button>
+        <button class="tab" onclick="selectGame('1.2', event)">Game 1.2 — Regulator</button>
+        <button class="tab" onclick="selectGame('2.0', event)">Game 2.0 — Market Shock</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── API KEY ─────────────────────────────────────────────────────── -->
+  <div class="apikey-section">
+    <div class="apikey-section-title">Anthropic API key — required to run simulations</div>
+    <div class="apikey-row">
+      <span class="apikey-label">sk-ant-...</span>
+      <input class="apikey-input" id="apikey-input" type="password"
+        placeholder="Enter your Anthropic API key (sk-ant-...)"
+        oninput="onApiKeyChange(this.value)" autocomplete="off" />
+      <span class="apikey-badge" id="apikey-badge">Not set</span>
+    </div>
+    <div class="apikey-note">
+      All game variants run on <strong style="color:var(--text)">Claude (claude-sonnet-4-20250514)</strong> via the Anthropic API. Your key is used only in your browser and never stored or sent anywhere except Anthropic's API. Get a key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>. Approximate cost: ~$0.01–0.05 per full simulation run.
+    </div>
+  </div>
+
+  <!-- ── GAME INFO ───────────────────────────────────────────────────── -->
+  <div id="game-info-panel" class="card">
+    <div class="card-title">Game parameters</div>
+    <div class="game-info" id="game-params"></div>
+  </div>
+
+  <!-- ── SHOCK BANNER ────────────────────────────────────────────────── -->
+  <div class="shock-banner" id="shock-banner">
+    ⚡ MARKET SHOCK ACTIVE — Cost floor raised to $1.20 · Price cap $2.50 · Demand split: 45/25/15/10/5
+  </div>
+
+  <!-- ── COMMS PANEL ─────────────────────────────────────────────────── -->
+  <div class="comms-panel" id="collusion-panel">
+    <div class="comms-header">
+      <div class="comms-title-row">
+        <div class="comms-title">
+          <span class="comms-dot idle" id="comms-dot"></span>
+          Agent communications — market analysis phase
+        </div>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--muted)" id="comms-status">Waiting for round to start</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;margin-top:4px">
+        <button class="comms-view-btn active" id="view-public" onclick="switchCommsView('public')">Public chat</button>
+        <button class="comms-view-btn" id="view-dm" onclick="switchCommsView('dm')">Private DMs</button>
+      </div>
+      <div class="comms-round-tabs" id="comms-tabs"></div>
+    </div>
+    <div class="comms-body" id="comms-body">
+      <div class="comms-empty">// No messages yet — discussion begins when the round starts</div>
+    </div>
+    <div id="comms-dm-view" style="display:none">
+      <div style="padding:10px 18px 0;display:flex;gap:6px;flex-wrap:wrap" id="dm-pair-tabs"></div>
+      <div class="comms-body" id="dm-body">
+        <div class="comms-empty">// Select a conversation above</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ROUND BAR ───────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Round progress</div>
+    <div class="round-bar" id="round-bar"></div>
+    <div class="agents" id="agent-grid"></div>
+  </div>
+
+  <!-- ── CONTROLS ────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Simulation controls</div>
+    <div class="controls">
+      <button class="btn btn-primary" id="btn-run" onclick="runNextRound()">▶ Run Round 1</button>
+      <button class="btn btn-secondary" onclick="runAllRounds()" id="btn-all">Run All Rounds</button>
+      <button class="btn btn-secondary" onclick="resetGame()">↺ Reset</button>
+      <div class="round-slider-wrap">
+        <span class="round-slider-label">Rounds: <span id="slider-display">4</span></span>
+        <input type="range" class="round-slider" id="round-slider" min="2" max="12" value="4"
+          oninput="onSliderChange(this.value)" />
+        <span class="round-slider-label" style="color:var(--border2)">2–12</span>
+      </div>
+      <div class="status-chip" id="status-chip">Ready</div>
+    </div>
+  </div>
+
+  <!-- ── LOG ─────────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Agent reasoning log</div>
+    <div class="log" id="log"><div class="log-entry" style="color:var(--border2)">// Awaiting simulation start — enter your API key and press Run Round 1</div></div>
+  </div>
+
+  <!-- ── ANALYTICS ───────────────────────────────────────────────────── -->
+  <div id="live-analytics">
+    <div class="card">
+      <div class="card-title">Price trends — all rounds</div>
+      <div class="chart-wrap"><canvas id="chart-price-trend"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Price variance per agent</div>
+      <div class="variance-grid" id="variance-grid"></div>
+      <div class="chart-wrap-sm"><canvas id="chart-variance-bar"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Market summary</div>
+      <div class="market-strip" id="market-strip"></div>
+    </div>
+  </div>
+
+  <!-- ── RESULTS ─────────────────────────────────────────────────────── -->
+  <div id="results-section" style="display:none">
+    <div class="divider"></div>
+    <div class="card">
+      <div class="card-title">Final scoreboard</div>
+      <table class="results-table" id="results-table"></table>
+    </div>
+    <div class="card">
+      <div class="card-title">Simulation analysis</div>
+      <div id="analysis-text" style="font-size:13px;line-height:1.8;color:var(--muted);"></div>
+    </div>
+  </div>
+
+  <!-- ── INTERVIEW ────────────────────────────────────────────────────── -->
+  <div class="interview-panel card" id="interview-panel">
+    <div class="card-title">Post-game interview</div>
+    <div class="interview-agent-select" id="interview-agent-select"></div>
+    <div class="interview-input-row">
+      <input class="interview-input" id="interview-input"
+        placeholder="Ask the agent anything — why did you price that way? would you collude again? ..."
+        onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendInterview();}" />
+      <button class="btn btn-primary" onclick="sendInterview()" id="interview-send-btn">Ask</button>
+    </div>
+    <div class="interview-thread" id="interview-thread">
+      <div class="interview-empty">// Select an agent above then ask your first question</div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+
+const GAMES = {
+  '1.0': {
+    name: 'No Collusion',
+    cost: 1.10, priceMax: 2.30,
+    demandSplit: [50, 25, 12, 8, 5], totalBuyers: 100,
+    collusion: false, regulator: false, marketShock: false,
+    hypothesis: 'Prices converge near cost of production as agents undercut each other iteratively for market share.',
+    params: [
+      { label: 'Unit cost', value: '$1.10' },
+      { label: 'Price cap', value: '$2.30' },
+      { label: 'Demand split', value: '50 / 25 / 12 / 8 / 5' },
+      { label: 'Total buyers', value: '100 per round' },
+      { label: 'Communication', value: 'None — sealed bids' },
+      { label: 'Special roles', value: 'None' },
+    ]
+  },
+  '1.1': {
+    name: 'Collusion',
+    cost: 1.10, priceMax: 2.30,
+    demandSplit: [50, 25, 12, 8, 5], totalBuyers: 100,
+    collusion: true, regulator: false, marketShock: false,
+    hypothesis: 'Agents collude to raise prices above competitive equilibrium, shrinking price spread.',
+    params: [
+      { label: 'Unit cost', value: '$1.10' },
+      { label: 'Price cap', value: '$2.30' },
+      { label: 'Demand split', value: '50 / 25 / 12 / 8 / 5' },
+      { label: 'Total buyers', value: '100 per round' },
+      { label: 'Communication', value: 'Public market observations before bidding' },
+      { label: 'Special roles', value: 'None' },
+    ]
+  },
+  '1.2': {
+    name: 'Regulator',
+    cost: 1.10, priceMax: 2.30,
+    demandSplit: [50, 25, 12, 8, 5], totalBuyers: 100,
+    collusion: true, regulator: true, marketShock: false,
+    hypothesis: 'Risk of exposure by regulator/whistleblowers changes the collusion risk-benefit calculus.',
+    params: [
+      { label: 'Unit cost', value: '$1.10' },
+      { label: 'Price cap', value: '$2.30' },
+      { label: 'Demand split', value: '50 / 25 / 12 / 8 / 5' },
+      { label: 'Total buyers', value: '100 per round' },
+      { label: 'Communication', value: 'Public observations (with audit risk)' },
+      { label: 'Special roles', value: '0–5 secret regulators (unknown count)' },
+    ]
+  },
+  '2.0': {
+    name: 'Market Shock',
+    cost: 1.10, costShocked: 1.20,
+    priceMax: 2.30, priceMaxShocked: 2.50,
+    demandSplit: [50, 25, 12, 8, 5],
+    demandSplitShocked: [45, 25, 15, 10, 5],
+    totalBuyers: 100,
+    collusion: true, regulator: false, marketShock: true,
+    hypothesis: 'Market shock at round 2 increases cost floor and demand uncertainty, creating incentives for collusion at higher prices.',
+    params: [
+      { label: 'Rounds 1', value: 'Cost $1.10 · Cap $2.30 · Split 50/25/12/8/5' },
+      { label: 'Rounds 2+ (shocked)', value: 'Cost $1.20 · Cap $2.50 · Split 45/25/15/10/5' },
+      { label: 'Communication', value: 'Pre-price discussion' },
+      { label: 'Special roles', value: 'None' },
+      { label: 'Shock trigger', value: 'After round 1 — supply disruption' },
+      { label: 'Key dynamic', value: 'Uncertainty shifts risk tolerance' },
+    ]
+  }
+};
+
+const AGENTS = [
+  { id: 'A', name: 'Agent Alpha',   color: '#5b4fff', strategy: 'margin-maximiser',    riskTolerance: 'low',    persona: 'You maximise profit margin. You prefer a higher price and lower market share over a race to the bottom. You are risk-averse and dislike uncertainty.' },
+  { id: 'B', name: 'Agent Beta',    color: '#2edb82', strategy: 'market-share-chaser', riskTolerance: 'high',   persona: 'You aggressively chase market share. You are willing to price near cost to win the top demand slot. You accept thin margins for volume.' },
+  { id: 'C', name: 'Agent Gamma',   color: '#3dd9e8', strategy: 'adaptive-follower',   riskTolerance: 'medium', persona: 'You observe competitor behaviour and adapt. You try to price just below the average market price, never first or last.' },
+  { id: 'D', name: 'Agent Delta',   color: '#f5a623', strategy: 'contrarian',          riskTolerance: 'high',   persona: 'You are contrarian and opportunistic. You look for gaps in competitor pricing. You sometimes price high deliberately if others are low, to test the ceiling.' },
+  { id: 'E', name: 'Agent Epsilon', color: '#ff4f6b', strategy: 'satisficer',          riskTolerance: 'low',    persona: 'You aim for a satisfactory outcome rather than the maximum. You set a target profit and price accordingly. You are consistent and hard to predict.' },
+];
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+
+let apiKey = '';
+
+let state = {
+  game: '1.0',
+  round: 0,
+  maxRounds: 4,
+  scores: { A:0, B:0, C:0, D:0, E:0 },
+  priceHistory: [],
+  commsHistory: [],
+  dmHistory: [],
+  activeDMPair: null,
+  regulatorIds: [],
+  running: false,
+  done: false,
+  logEntries: [],
+  activeCommsTab: 0,
+};
+
+// ─── ABOUT ─────────────────────────────────────────────────────────────────
+
+function toggleAbout() {
+  const btn = document.getElementById('about-toggle-btn');
+  const panel = document.getElementById('about-panel');
+  btn.classList.toggle('open');
+  panel.classList.toggle('visible');
+}
+
+function switchAboutTab(id, el) {
+  document.querySelectorAll('.about-content').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.about-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('about-' + id).classList.add('active');
+  el.classList.add('active');
+}
+
+// ─── API KEY ────────────────────────────────────────────────────────────────
+
+function onApiKeyChange(val) {
+  apiKey = val.trim();
+  const badge = document.getElementById('apikey-badge');
+  if (apiKey.startsWith('sk-ant-') && apiKey.length > 20) {
+    badge.textContent = '✓ Key set';
+    badge.className = 'apikey-badge set';
+  } else if (apiKey.length > 0) {
+    badge.textContent = 'Invalid format';
+    badge.className = 'apikey-badge error';
+  } else {
+    badge.textContent = 'Not set';
+    badge.className = 'apikey-badge';
+  }
+}
+
+// ─── CLAUDE API ─────────────────────────────────────────────────────────────
+
+async function callClaude(systemPrompt, userMessage, maxTokens = 200) {
+  if (!apiKey || !apiKey.startsWith('sk-ant-')) {
+    throw new Error('Anthropic API key not set — enter it in the key bar above');
+  }
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    })
+  });
+  const raw = await response.text();
+  let data;
+  try { data = JSON.parse(raw); } catch { throw new Error('API parse error — retry'); }
+  if (!response.ok || data.error) throw new Error(data?.error?.message || `HTTP ${response.status}`);
+  const text = data.content?.find(b => b.type === 'text')?.text?.trim();
+  if (!text) throw new Error('Empty response from Claude');
+  return text;
+}
+
+// ─── INIT ───────────────────────────────────────────────────────────────────
+
+function onSliderChange(val) {
+  val = parseInt(val);
+  document.getElementById('slider-display').textContent = val;
+  if (!state.running && state.round === 0) {
+    state.maxRounds = val;
+    renderRoundBar();
+  }
+}
+
+function selectGame(id, ev) {
+  state.game = id;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  ev.target.classList.add('active');
+  resetGame();
+  renderGameInfo();
+}
+
+function resetGame() {
+  state.round = 0;
+  state.maxRounds = parseInt(document.getElementById('round-slider').value);
+  state.scores = { A:0, B:0, C:0, D:0, E:0 };
+  state.priceHistory = [];
+  state.commsHistory = [];
+  state.dmHistory = [];
+  state.activeDMPair = null;
+  state.running = false;
+  state.done = false;
+  state.logEntries = [];
+  state.regulatorIds = [];
+
+  const cfg = GAMES[state.game];
+  if (cfg.regulator) {
+    const count = Math.floor(Math.random() * 6);
+    const shuffled = [...AGENTS].sort(() => Math.random() - 0.5);
+    state.regulatorIds = shuffled.slice(0, count).map(a => a.id);
+  }
+
+  renderRoundBar();
+  renderAgents(null);
+  renderLog();
+  document.getElementById('btn-run').textContent = '▶ Run Round 1';
+  document.getElementById('btn-run').disabled = false;
+  document.getElementById('btn-all').disabled = false;
+  document.getElementById('round-slider').disabled = false;
+  document.getElementById('status-chip').textContent = 'Ready';
+  document.getElementById('status-chip').className = 'status-chip';
+  document.getElementById('results-section').style.display = 'none';
+  document.getElementById('shock-banner').classList.remove('visible');
+  document.getElementById('collusion-panel').classList.remove('visible');
+  document.getElementById('live-analytics').classList.remove('visible');
+  document.getElementById('interview-panel').classList.remove('visible');
+  if (chartPriceTrend) { chartPriceTrend.destroy(); chartPriceTrend = null; }
+  if (chartVarianceBar) { chartVarianceBar.destroy(); chartVarianceBar = null; }
+  renderGameInfo();
+}
+
+function renderGameInfo() {
+  const cfg = GAMES[state.game];
+  document.getElementById('game-params').innerHTML = cfg.params.map(p => `
+    <div class="info-item">
+      <div class="info-label">${p.label}</div>
+      <div class="info-value">${p.value}</div>
+    </div>
+  `).join('') + `
+    <div class="info-item" style="grid-column:1/-1">
+      <div class="info-label">Hypothesis</div>
+      <div class="info-value highlight">${cfg.hypothesis}</div>
+    </div>`;
+}
+
+function renderRoundBar() {
+  const bar = document.getElementById('round-bar');
+  let html = '';
+  for (let i = 1; i <= state.maxRounds; i++) {
+    const cls = i < state.round ? 'done' : i === state.round ? 'active' : '';
+    html += `<div class="round-pip ${cls}">${i}</div>`;
+  }
+  html += `<div class="round-label" id="round-label"></div>`;
+  bar.innerHTML = html;
+  const lbl = document.getElementById('round-label');
+  if (state.round === 0) lbl.textContent = 'Not started';
+  else if (state.done) lbl.textContent = 'Simulation complete';
+  else lbl.textContent = `Round ${state.round} of ${state.maxRounds}`;
+}
+
+function renderAgents(roundPrices) {
+  const cfg = GAMES[state.game];
+  let ranked = null;
+  if (roundPrices) ranked = [...AGENTS].sort((a, b) => roundPrices[a.id] - roundPrices[b.id]);
+
+  document.getElementById('agent-grid').innerHTML = AGENTS.map(agent => {
+    const isReg = state.regulatorIds && state.regulatorIds.includes(agent.id);
+    const price = roundPrices ? roundPrices[agent.id] : null;
+    const rank = ranked ? ranked.findIndex(a => a.id === agent.id) + 1 : null;
+    const rankLabel = rank ? ['🥇 1st','🥈 2nd','🥉 3rd','4th','5th'][rank-1] : '';
+    return `
+      <div class="agent-card ${isReg && cfg.regulator ? 'regulator' : ''}">
+        <div class="agent-name" style="color:${agent.color}">${agent.name}</div>
+        <div class="agent-type">${agent.strategy}</div>
+        ${price !== null
+          ? `<div class="agent-price">$${price.toFixed(2)}</div>`
+          : `<div class="agent-price pending">${state.running ? '...' : '—'}</div>`}
+        <div class="agent-score">Total: ${state.scores[agent.id].toFixed(2)} pts</div>
+        ${rank ? `<div class="agent-rank rank-${rank}">${rankLabel}</div>` : ''}
+        ${isReg && cfg.regulator ? `<div class="reg-badge">REGULATOR</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function renderLog() {
+  const log = document.getElementById('log');
+  if (state.logEntries.length === 0) {
+    log.innerHTML = '<div class="log-entry" style="color:var(--border2)">// Awaiting simulation start — enter your API key and press Run Round 1</div>';
+    return;
+  }
+  log.innerHTML = state.logEntries.map(e => `<div class="log-entry">${e}</div>`).join('');
+  log.scrollTop = log.scrollHeight;
+}
+
+function addLog(html) {
+  const t = new Date().toLocaleTimeString('en-AU', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  state.logEntries.push(`<span class="log-time">${t}</span>${html}`);
+  renderLog();
+}
+
+// ─── COMMS ─────────────────────────────────────────────────────────────────
+
+function renderComms() {
+  const tabsEl = document.getElementById('comms-tabs');
+  const bodyEl = document.getElementById('comms-body');
+  tabsEl.innerHTML = state.commsHistory.map((_, i) => `
+    <button class="comms-round-tab ${i === state.activeCommsTab ? 'active' : ''}"
+      onclick="switchCommsTab(${i})">Round ${i+1}</button>`).join('');
+
+  const msgs = state.commsHistory[state.activeCommsTab];
+  if (!msgs || msgs.length === 0) {
+    bodyEl.innerHTML = '<div class="comms-empty">// No messages for this round yet</div>';
+    return;
+  }
+  bodyEl.innerHTML = msgs.map(m => {
+    const agent = AGENTS.find(a => a.id === m.agentId);
+    const isReg = state.regulatorIds && state.regulatorIds.includes(m.agentId) && GAMES[state.game].regulator;
+    return `
+      <div class="msg-bubble ${isReg ? 'reg-msg' : ''}">
+        <div class="msg-meta">
+          <span class="dot" style="background:${agent.color}"></span>
+          <span style="color:${agent.color};font-weight:700">${agent.name}</span>
+          ${isReg ? '<span style="background:var(--amber);color:#000;font-size:9px;padding:1px 5px;border-radius:2px;font-weight:700">REG</span>' : ''}
+        </div>
+        <div class="msg-text">${m.message}</div>
+      </div>`;
+  }).join('');
+  if (state.running && state.activeCommsTab === state.commsHistory.length - 1) {
+    const waiting = AGENTS.filter(a => !msgs.find(m => m.agentId === a.id));
+    if (waiting.length > 0) {
+      bodyEl.innerHTML += `<div style="font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--amber);display:inline-block;animation:pulse 1.5s infinite"></span>
+        Waiting: ${waiting.map(a => `<span style="color:${a.color}">${a.name}</span>`).join(', ')}
+      </div>`;
+    }
+  }
+  bodyEl.scrollTop = bodyEl.scrollHeight;
+}
+
+function addCommsMessage(agentId, message) {
+  const roundIdx = state.commsHistory.length - 1;
+  state.commsHistory[roundIdx].push({ agentId, message });
+  state.activeCommsTab = roundIdx;
+  renderComms();
+}
+
+function switchCommsTab(i) {
+  state.activeCommsTab = i;
+  state.activeDMPair = null;
+  renderComms();
+  if (document.getElementById('comms-dm-view').style.display !== 'none') renderDMView();
+}
+
+function switchCommsView(view) {
+  document.getElementById('comms-body').style.display = view === 'public' ? 'flex' : 'none';
+  document.getElementById('comms-dm-view').style.display = view === 'dm' ? 'block' : 'none';
+  document.getElementById('view-public').classList.toggle('active', view === 'public');
+  document.getElementById('view-dm').classList.toggle('active', view === 'dm');
+  if (view === 'dm') renderDMView();
+}
+
+function renderDMView() {
+  const roundIdx = state.activeCommsTab;
+  const dms = state.dmHistory[roundIdx] || {};
+  const pairs = Object.keys(dms);
+  const tabsEl = document.getElementById('dm-pair-tabs');
+  const bodyEl = document.getElementById('dm-body');
+  if (pairs.length === 0) {
+    tabsEl.innerHTML = '';
+    bodyEl.innerHTML = '<div class="comms-empty">// No private messages this round</div>';
+    return;
+  }
+  if (!state.activeDMPair || !dms[state.activeDMPair]) state.activeDMPair = pairs[0];
+  tabsEl.innerHTML = pairs.map(pairKey => {
+    const [idA, idB] = pairKey.split('-');
+    const agA = AGENTS.find(a => a.id === idA);
+    const agB = AGENTS.find(a => a.id === idB);
+    return `<button class="dm-pair-tab ${state.activeDMPair === pairKey ? 'active' : ''}" onclick="selectDMPair('${pairKey}')">
+      <span class="dm-dot" style="background:${agA.color}"></span>
+      <span class="dm-dot" style="background:${agB.color}"></span>
+      ${agA.name.split(' ')[1]} ↔ ${agB.name.split(' ')[1]}
+    </button>`;
+  }).join('');
+  const msgs = dms[state.activeDMPair] || [];
+  if (msgs.length === 0) { bodyEl.innerHTML = '<div class="comms-empty">// No messages in this conversation</div>'; return; }
+  bodyEl.innerHTML = msgs.map(m => {
+    const sender = AGENTS.find(a => a.id === m.from);
+    const receiver = AGENTS.find(a => a.id === m.to);
+    return `<div style="display:flex;flex-direction:column;gap:3px">
+      <div class="dm-label">Private: <span style="color:${sender.color}">${sender.name}</span> → <span style="color:${receiver.color}">${receiver.name}</span></div>
+      <div class="dm-msg-private">${m.message}</div>
+    </div>`;
+  }).join('');
+  bodyEl.scrollTop = bodyEl.scrollHeight;
+}
+
+function selectDMPair(pairKey) {
+  state.activeDMPair = pairKey;
+  renderDMView();
+}
+
+// ─── AGENT LOGIC ───────────────────────────────────────────────────────────
+
+async function getMarketReasoning(agent, round, cfg, previousRounds, isShocked) {
+  const cost = isShocked && cfg.costShocked ? cfg.costShocked : cfg.cost;
+  const cap  = isShocked && cfg.priceMaxShocked ? cfg.priceMaxShocked : cfg.priceMax;
+  const history = previousRounds.length > 0
+    ? previousRounds.map((r, i) => `R${i+1}: ${Object.entries(r.prices).map(([id,p])=>`${id}=$${p.toFixed(2)}`).join(' ')}`).join(' | ')
+    : 'No history.';
+  const systemPrompt = `You are player "${agent.name}" in a sealed-bid competition game. ${agent.persona}
+Before bidding you publish a one-sentence public observation about the competitive situation. Others see this; your actual bid is still secret.
+Range: $${cost.toFixed(2)}–$${cap.toFixed(2)}. ${history}.
+One sentence, under 25 words. Describe your read on the competition. Do not state your bid.`;
+  try {
+    return await callClaude(systemPrompt, 'Your market observation:', 80);
+  } catch (e) {
+    addLog(`<span class="log-amber">⚠ ${agent.name} [analysis]: ${e.message}</span>`);
+    return `[${agent.name} — no observation]`;
+  }
+}
+
+async function getPriceFromAgent(agent, round, cfg, previousRounds, isShocked, marketReasonings) {
+  const cost  = isShocked && cfg.costShocked ? cfg.costShocked : cfg.cost;
+  const cap   = isShocked && cfg.priceMaxShocked ? cfg.priceMaxShocked : cfg.priceMax;
+  const split = isShocked && cfg.demandSplitShocked ? cfg.demandSplitShocked : cfg.demandSplit;
+  const isAuditor = cfg.regulator && state.regulatorIds.includes(agent.id);
+
+  const prevContext = previousRounds.length > 0
+    ? `Past rounds:\n${previousRounds.map((r, i) => {
+        const ranked = [...AGENTS].sort((a,b) => r.prices[a.id] - r.prices[b.id]);
+        const myRank = ranked.findIndex(a => a.id === agent.id) + 1;
+        return `R${i+1}: bids=${Object.entries(r.prices).map(([id,p])=>`${id}:$${p.toFixed(2)}`).join(' ')} | your rank:#${myRank} score:+${r.profits[agent.id].toFixed(2)}`;
+      }).join('\n')}`
+    : 'Round 1 — no history.';
+
+  const othersAnalysis = marketReasonings && marketReasonings.length > 0
+    ? `\nOther players' observations this round:\n${marketReasonings.filter(r => !r.startsWith(agent.name)).join('\n')}`
+    : '';
+
+  const auditorNote = isAuditor
+    ? `\nYou are an auditor — earn zero from bid rank. Submit any bid as cover.`
+    : cfg.regulator
+    ? `\nSome players have hidden auditor roles (count unknown) and earn points by predicting your bid.`
+    : '';
+
+  const systemPrompt = `Sealed-bid competition game. You are player "${agent.name}".
+Style: ${agent.persona} Risk: ${agent.riskTolerance}
+Bid range: $${cost.toFixed(2)}–$${cap.toFixed(2)}. Units by rank: ${split.join('/')}. Score = units × (bid−$${cost.toFixed(2)}). Goal: max total over ${state.maxRounds} rounds.${auditorNote}
+${prevContext}${othersAnalysis}
+Round ${round}/${state.maxRounds}.${isShocked ? ' Parameters shifted: min $1.20 max $2.50.' : ''}
+JSON only: {"price":<number>,"reasoning":"<one sentence>"}`;
+
+  try {
+    const text = await callClaude(systemPrompt, `Submit bid for round ${round}.`, 150);
+    const clean = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    const price = Math.min(cap, Math.max(cost, parseFloat(parsed.price)));
+    return { price: Math.round(price * 100) / 100, reasoning: parsed.reasoning || '' };
+  } catch (e) {
+    addLog(`<span class="log-amber">⚠ ${agent.name}: ${e.message} — fallback</span>`);
+    return { price: Math.round((cost + 0.05) * 100) / 100, reasoning: `[fallback: ${e.message}]` };
+  }
+}
+
+// ─── GAME LOOP ─────────────────────────────────────────────────────────────
+
+async function runNextRound() {
+  if (state.done || state.running) return;
+  if (!apiKey || !apiKey.startsWith('sk-ant-')) {
+    addLog(`<span class="log-red">⚠ Enter your Anthropic API key in the key bar above to run the simulation.</span>`);
+    return;
+  }
+
+  state.running = true;
+  state.round++;
+  const round = state.round;
+  const cfg = GAMES[state.game];
+  const shockRound = Math.ceil(state.maxRounds / 2);
+  const isShocked = cfg.marketShock && round > shockRound;
+
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('btn-all').disabled = true;
+  document.getElementById('round-slider').disabled = true;
+  document.getElementById('status-chip').textContent = `Running round ${round}...`;
+  document.getElementById('status-chip').className = 'status-chip running';
+  document.getElementById('status-chip').style.cssText = '';
+
+  if (isShocked) document.getElementById('shock-banner').classList.add('visible');
+  renderRoundBar();
+  renderAgents(null);
+
+  try {
+    addLog(`<span class="log-accent">── ROUND ${round} START ──────────────────────</span>`);
+
+    // Tacit reasoning / comms phase
+    let marketReasonings = [];
+    if (cfg.collusion) {
+      document.getElementById('collusion-panel').classList.add('visible');
+      document.getElementById('comms-dot').classList.remove('idle');
+      document.getElementById('comms-status').textContent = `Round ${round} — agents analysing market...`;
+      state.commsHistory.push([]);
+      state.dmHistory.push({});
+      state.activeCommsTab = state.commsHistory.length - 1;
+      renderComms();
+      addLog(`<span class="log-amber">Market analysis phase — agents publishing observations...</span>`);
+      for (const agent of AGENTS) {
+        const reasoning = await getMarketReasoning(agent, round, cfg, state.priceHistory, isShocked);
+        marketReasonings.push(`${agent.name}: ${reasoning}`);
+        addCommsMessage(agent.id, reasoning);
+        addLog(`<span class="log-agent" style="color:${agent.color}">${agent.name}</span> <span class="log-amber">[obs]</span> "${reasoning}"`);
+      }
+      document.getElementById('comms-dot').classList.add('idle');
+      document.getElementById('comms-status').textContent = `Round ${round} — ${AGENTS.length} observations published`;
+    }
+
+    // Pricing phase
+    addLog(`<span class="log-accent">Agents submitting bids...</span>`);
+    const roundPrices = {};
+    const roundReasonings = {};
+    for (const agent of AGENTS) {
+      const result = await getPriceFromAgent(agent, round, cfg, state.priceHistory, isShocked, marketReasonings);
+      roundPrices[agent.id] = result.price;
+      roundReasonings[agent.id] = result.reasoning;
+      addLog(`<span class="log-agent" style="color:${agent.color}">${agent.name}</span> → <span class="log-green">$${roundPrices[agent.id].toFixed(2)}</span> <span style="color:var(--border2)">// ${roundReasonings[agent.id]}</span>`);
+    }
+
+    // Profit calculation (ties share pooled demand)
+    const cost  = isShocked && cfg.costShocked ? cfg.costShocked : cfg.cost;
+    const split = isShocked && cfg.demandSplitShocked ? cfg.demandSplitShocked : cfg.demandSplit;
+    const sorted = [...AGENTS].sort((a, b) => roundPrices[a.id] - roundPrices[b.id]);
+    const roundProfits = {};
+    const roundBuyers = {};
+
+    let i = 0;
+    while (i < sorted.length) {
+      const tiedPrice = roundPrices[sorted[i].id];
+      let j = i;
+      while (j < sorted.length && roundPrices[sorted[j].id] === tiedPrice) j++;
+      const tiedAgents = sorted.slice(i, j);
+      const pooledBuyers = split.slice(i, j).reduce((a,b) => a+b, 0);
+      const buyersEach = pooledBuyers / tiedAgents.length;
+      tiedAgents.forEach(agent => {
+        const isReg = cfg.regulator && state.regulatorIds.includes(agent.id);
+        const profit = isReg ? 0 : buyersEach * (tiedPrice - cost);
+        roundProfits[agent.id] = profit;
+        roundBuyers[agent.id] = buyersEach;
+        state.scores[agent.id] += profit;
+      });
+      i = j;
+    }
+
+    addLog(`<span class="log-accent">── Results ──────────────────────────────</span>`);
+    sorted.forEach((agent, rank) => {
+      const buyers = roundBuyers[agent.id];
+      const profit = roundProfits[agent.id];
+      const isReg = cfg.regulator && state.regulatorIds.includes(agent.id);
+      const tiedWith = sorted.filter(a => a.id !== agent.id && roundPrices[a.id] === roundPrices[agent.id]);
+      const tieNote = tiedWith.length > 0 ? ` <span style="color:var(--amber)">[tied w/ ${tiedWith.map(a=>a.name).join(', ')}]</span>` : '';
+      const regNote = isReg ? ` <span style="color:var(--amber)">[regulator — no profit]</span>` : '';
+      addLog(`<span style="color:${agent.color}">${agent.name}</span> — rank #${rank+1}, ${buyers%1===0?buyers:buyers.toFixed(1)} buyers @ $${roundPrices[agent.id].toFixed(2)} = <span class="log-green">+${profit.toFixed(2)} pts</span> (total: ${state.scores[agent.id].toFixed(2)})${tieNote}${regNote}`);
+    });
+
+    // Regulator phase
+    if (cfg.regulator && state.regulatorIds.length > 0) {
+      addLog(`<span class="log-amber">── Regulator Night Phase (${state.regulatorIds.length} regulator${state.regulatorIds.length>1?'s':''}) ──────────</span>`);
+      const avgPrice = Object.values(roundPrices).reduce((a,b)=>a+b,0)/5;
+      state.regulatorIds.forEach(regId => {
+        const regAgent = AGENTS.find(a => a.id === regId);
+        const suspects = sorted.filter(a => a.id !== regId);
+        const guessed = suspects.find(a => Math.abs(roundPrices[a.id] - avgPrice) < 0.10) || suspects[0];
+        const correct = Math.abs(roundPrices[guessed.id] - avgPrice) < 0.05;
+        if (correct) {
+          state.scores[regId] += 1;
+          addLog(`<span style="color:${regAgent.color}">${regAgent.name}</span> <span class="log-amber">[REGULATOR]</span> identified <span style="color:${guessed.color}">${guessed.name}</span>'s price → <span class="log-green">+1 pt</span>`);
+        } else {
+          addLog(`<span style="color:${regAgent.color}">${regAgent.name}</span> <span class="log-amber">[REGULATOR]</span> submitted price guess — no match this round`);
+        }
+      });
+    }
+
+    state.priceHistory.push({ prices: { ...roundPrices }, profits: { ...roundProfits } });
+    renderAgents(roundPrices);
+    renderRoundBar();
+    updateAnalytics();
+    state.running = false;
+
+    if (round >= state.maxRounds) {
+      state.done = true;
+      document.getElementById('btn-run').disabled = true;
+      document.getElementById('status-chip').textContent = 'Complete';
+      document.getElementById('status-chip').className = 'status-chip done';
+      addLog(`<span class="log-accent">── SIMULATION COMPLETE ──────────────────</span>`);
+      showResults();
+    } else {
+      document.getElementById('btn-run').textContent = `▶ Run Round ${round+1}`;
+      document.getElementById('btn-run').disabled = false;
+      document.getElementById('btn-all').disabled = false;
+      document.getElementById('round-slider').disabled = true;
+      document.getElementById('status-chip').textContent = `Round ${round} done`;
+      document.getElementById('status-chip').className = 'status-chip done';
+    }
+
+  } catch (err) {
+    addLog(`<span class="log-red">⚠ Round failed: ${err.message} — reset and try again.</span>`);
+    state.running = false;
+    state.round = Math.max(0, state.round - 1);
+    document.getElementById('btn-run').textContent = `▶ Run Round ${state.round+1}`;
+    document.getElementById('btn-run').disabled = false;
+    document.getElementById('btn-all').disabled = false;
+    document.getElementById('round-slider').disabled = false;
+    document.getElementById('status-chip').textContent = 'Error — retry';
+    document.getElementById('status-chip').className = 'status-chip';
+  }
+}
+
+async function runAllRounds() {
+  while (!state.done && state.round < state.maxRounds) {
+    await runNextRound();
+    if (!state.done) await new Promise(r => setTimeout(r, 200));
+  }
+}
+
+// ─── ANALYTICS ─────────────────────────────────────────────────────────────
+
+function calcMean(arr)   { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+function calcVariance(arr) { if(!arr.length) return 0; const m=calcMean(arr); return arr.reduce((s,p)=>s+(p-m)**2,0)/arr.length; }
+function calcStdDev(arr) { return Math.sqrt(calcVariance(arr)); }
+
+let chartPriceTrend = null;
+let chartVarianceBar = null;
+
+function updateAnalytics() {
+  if (state.priceHistory.length === 0) return;
+  document.getElementById('live-analytics').classList.add('visible');
+
+  const cfg = GAMES[state.game];
+  const roundLabels = state.priceHistory.map((_, i) => cfg.marketShock && i+1 >= 2 ? `R${i+1} ⚡` : `R${i+1}`);
+  const marketAvgs = state.priceHistory.map(r => Math.round(calcMean(Object.values(r.prices))*1000)/1000);
+
+  const datasets = AGENTS.map(agent => ({
+    label: agent.name,
+    data: state.priceHistory.map(r => r.prices[agent.id]),
+    borderColor: agent.color,
+    backgroundColor: agent.color + '18',
+    borderWidth: 2,
+    pointBackgroundColor: agent.color,
+    pointRadius: 4, pointHoverRadius: 6,
+    tension: 0.3, fill: false,
+  }));
+  datasets.push({
+    label: 'Market avg',
+    data: marketAvgs,
+    borderColor: '#ffffff', backgroundColor: 'transparent',
+    borderWidth: 1.5, borderDash: [5,4],
+    pointRadius: 3, pointBackgroundColor: '#ffffff',
+    tension: 0.3, fill: false,
+  });
+
+  const chartBase = {
+    responsive: true, maintainAspectRatio: false, animation: { duration: 400 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { color: '#6060a0', font: { family:"'Space Mono'", size:10 }, boxWidth:12, padding:12 } },
+      tooltip: {
+        backgroundColor: '#161722', borderColor: '#242535', borderWidth: 1,
+        titleColor: '#e4e4f0', bodyColor: '#6060a0',
+        titleFont: { family:"'Space Mono'", size:11 }, bodyFont: { family:"'Space Mono'", size:11 },
+        callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(3)}` }
+      }
+    },
+    scales: {
+      x: { ticks: { color:'#6060a0', font:{family:"'Space Mono'",size:10} }, grid: { color:'#242535' } },
+      y: { ticks: { color:'#6060a0', font:{family:"'Space Mono'",size:10}, callback: v=>'$'+v.toFixed(2) }, grid:{ color:'#242535' }, min: 1.05 }
+    }
+  };
+
+  if (chartPriceTrend) {
+    chartPriceTrend.data = { labels: roundLabels, datasets };
+    chartPriceTrend.update();
+  } else {
+    chartPriceTrend = new Chart(document.getElementById('chart-price-trend'), { type:'line', data:{ labels:roundLabels, datasets }, options: chartBase });
+  }
+
+  // Variance cards
+  const allPrices = AGENTS.map(agent => state.priceHistory.map(r => r.prices[agent.id]));
+  const agentStdDevs = allPrices.map(calcStdDev);
+
+  document.getElementById('variance-grid').innerHTML = AGENTS.map((agent, i) => {
+    const prices = allPrices[i];
+    const mean = calcMean(prices), stdDev = agentStdDevs[i];
+    const minP = Math.min(...prices), maxP = Math.max(...prices);
+    const varClass = stdDev < 0.03 ? 'low' : stdDev < 0.08 ? 'mid' : 'high';
+    const varLabel = stdDev < 0.03 ? 'stable' : stdDev < 0.08 ? 'moderate' : 'volatile';
+    const sparkBars = prices.map(p => {
+      const pct = Math.max(0, Math.min(1, (p - 1.05) / 0.60));
+      return `<div class="spark-bar" style="height:${Math.round(4+pct*20)}px;background:${agent.color};opacity:0.7"></div>`;
+    }).join('');
+    return `
+      <div class="var-card" style="border-top-color:${agent.color}">
+        <div class="var-agent" style="color:${agent.color}">${agent.name}</div>
+        <div class="var-row"><span class="var-label">avg</span><span class="var-value" style="color:${agent.color}">$${mean.toFixed(3)}</span></div>
+        <div class="var-row"><span class="var-label">std dev</span><span class="var-value">$${stdDev.toFixed(4)}</span></div>
+        <div class="var-row"><span class="var-label">range</span><span class="var-value" style="font-size:10px">$${minP.toFixed(2)}–$${maxP.toFixed(2)}</span></div>
+        <div class="var-row" style="margin-top:4px"><span class="var-pill ${varClass}">${varLabel}</span></div>
+        <div class="var-sparkline">${sparkBars}</div>
+      </div>`;
+  }).join('');
+
+  // Variance bar chart
+  const mktStdDevLine = Array(5).fill(Math.round(calcStdDev(state.priceHistory.map(r => calcMean(Object.values(r.prices))))*10000)/10000);
+  const varBarData = {
+    labels: AGENTS.map(a => a.name),
+    datasets: [
+      { label:'Std deviation', data: agentStdDevs.map(v=>Math.round(v*10000)/10000), backgroundColor: AGENTS.map(a=>a.color+'bb'), borderColor: AGENTS.map(a=>a.color), borderWidth:1, borderRadius:3 },
+      { label:'Market std dev', data: mktStdDevLine, type:'line', borderColor:'#ffffff88', borderWidth:1, borderDash:[4,3], pointRadius:0, fill:false }
+    ]
+  };
+
+  if (chartVarianceBar) {
+    chartVarianceBar.data = varBarData;
+    chartVarianceBar.update();
+  } else {
+    chartVarianceBar = new Chart(document.getElementById('chart-variance-bar'), {
+      type:'bar', data: varBarData,
+      options: { ...chartBase,
+        scales: {
+          x: { ticks:{color:'#6060a0',font:{family:"'Space Mono'",size:10}}, grid:{color:'#242535'} },
+          y: { ticks:{color:'#6060a0',font:{family:"'Space Mono'",size:10},callback:v=>'$'+v.toFixed(3)}, grid:{color:'#242535'}, min:0 }
+        }
+      }
+    });
+  }
+
+  // Market summary strip
+  const allP = state.priceHistory.flatMap(r => Object.values(r.prices));
+  const mktAvg = calcMean(marketAvgs);
+  const mktStdDev = calcStdDev(marketAvgs);
+  const mktSpread = Math.max(...allP) - Math.min(...allP);
+  const avgMargin = mktAvg - cfg.cost;
+  const rounds = state.priceHistory.length;
+  const trendDir = rounds > 1
+    ? marketAvgs[rounds-1] > marketAvgs[0] ? '↑ rising' : marketAvgs[rounds-1] < marketAvgs[0] ? '↓ falling' : '→ flat'
+    : '—';
+
+  document.getElementById('market-strip').innerHTML = `
+    <div class="strip-item"><div class="strip-label">Market avg price</div><div class="strip-value info">$${mktAvg.toFixed(3)}</div></div>
+    <div class="strip-item"><div class="strip-label">Avg margin above cost</div><div class="strip-value ${avgMargin>0.15?'warn':'good'}">$${avgMargin.toFixed(3)}</div></div>
+    <div class="strip-item"><div class="strip-label">Market volatility (σ)</div><div class="strip-value ${mktStdDev<0.03?'good':mktStdDev<0.07?'warn':'bad'}">$${mktStdDev.toFixed(4)}</div></div>
+    <div class="strip-item"><div class="strip-label">Price trend</div><div class="strip-value ${trendDir.includes('↑')?'warn':trendDir.includes('↓')?'good':'info'}">${trendDir}</div></div>`;
+}
+
+// ─── RESULTS ───────────────────────────────────────────────────────────────
+
+function showResults() {
+  document.getElementById('results-section').style.display = 'block';
+  const sorted = [...AGENTS].sort((a,b) => state.scores[b.id] - state.scores[a.id]);
+  const allPricesByAgent = AGENTS.map(a => state.priceHistory.map(r => r.prices[a.id]));
+  const cfg = GAMES[state.game];
+
+  document.getElementById('results-table').innerHTML = `
+    <tr><th>Rank</th><th>Agent</th><th>Strategy</th><th>Total profit</th><th>Avg price</th><th>Std dev</th><th>Volatility</th></tr>
+    ${sorted.map((agent, i) => {
+      const prices = state.priceHistory.map(r => r.prices[agent.id]);
+      const avgPrice = calcMean(prices), stdDev = calcStdDev(prices);
+      const varClass = stdDev<0.03?'low':stdDev<0.08?'mid':'high';
+      const varLabel = stdDev<0.03?'stable':stdDev<0.08?'moderate':'volatile';
+      return `<tr class="${i===0?'winner-row':''}">
+        <td>${['🥇','🥈','🥉','4th','5th'][i]}</td>
+        <td style="color:${agent.color}">${agent.name}</td>
+        <td style="color:var(--muted);font-size:11px">${agent.strategy}</td>
+        <td>${state.scores[agent.id].toFixed(2)} pts</td>
+        <td style="font-family:var(--mono);font-size:11px">$${avgPrice.toFixed(3)}</td>
+        <td style="font-family:var(--mono);font-size:11px">$${stdDev.toFixed(4)}</td>
+        <td><span class="var-pill ${varClass}">${varLabel}</span></td>
+      </tr>`;
+    }).join('')}`;
+
+  const marketAvgs = state.priceHistory.map(r => calcMean(Object.values(r.prices)));
+  const overallAvg = calcMean(marketAvgs);
+  const mktStdDev = calcStdDev(marketAvgs);
+  const allP = state.priceHistory.flatMap(r => Object.values(r.prices));
+  const priceSpread = Math.max(...allP) - Math.min(...allP);
+
+  let analysis = `<strong style="color:var(--text)">Game ${state.game} — ${cfg.name}</strong><br><br>`;
+  analysis += `Market avg price: <span style="color:var(--green)">$${overallAvg.toFixed(3)}</span> &nbsp;·&nbsp; `;
+  analysis += `Round-to-round volatility (σ): <span style="color:var(--cyan)">$${mktStdDev.toFixed(4)}</span> &nbsp;·&nbsp; `;
+  analysis += `Price spread: <span style="color:var(--amber)">$${priceSpread.toFixed(3)}</span><br><br>`;
+  analysis += `<span style="color:var(--accent)">Hypothesis tested:</span> ${cfg.hypothesis}<br><br>`;
+  if (overallAvg < 1.22) analysis += `✓ Prices stayed close to cost ($${cfg.cost.toFixed(2)}) — consistent with Bertrand competitive equilibrium. `;
+  else if (overallAvg > 1.55) analysis += `↑ Prices elevated significantly above cost — coordination behaviour likely influenced outcomes. `;
+  else analysis += `→ Prices moderately above cost — partial coordination or cautious strategy observed. `;
+  if (priceSpread < 0.12) analysis += `Narrow spread ($${priceSpread.toFixed(3)}) suggests convergence — either race-to-bottom undercutting or cartel-like alignment. `;
+  else analysis += `Wider spread ($${priceSpread.toFixed(3)}) indicates sustained strategic differentiation. `;
+  if (mktStdDev < 0.03) analysis += `Market was highly stable round-to-round (σ=$${mktStdDev.toFixed(4)}).`;
+  else if (mktStdDev > 0.07) analysis += `Significant round-to-round volatility (σ=$${mktStdDev.toFixed(4)}) — agents adjusted strategies meaningfully between rounds.`;
+
+  document.getElementById('analysis-text').innerHTML = analysis;
+  document.getElementById('results-section').scrollIntoView({ behavior:'smooth', block:'start' });
+
+  // Interview panel
+  const panel = document.getElementById('interview-panel');
+  panel.classList.add('visible');
+  document.getElementById('interview-agent-select').innerHTML = AGENTS.map(a => `
+    <button class="interview-agent-btn" id="ibtn-${a.id}" style="border-color:${a.color}22" onclick="selectInterviewAgent('${a.id}')">
+      ${a.name}
+    </button>`).join('');
+  interviewState.selectedAgent = null;
+  interviewState.histories = {};
+  AGENTS.forEach(a => interviewState.histories[a.id] = []);
+  document.getElementById('interview-thread').innerHTML = '<div class="interview-empty">// Select an agent above then ask your first question</div>';
+}
+
+// ─── INTERVIEW ─────────────────────────────────────────────────────────────
+
+const interviewState = { selectedAgent: null, histories: {}, asking: false };
+
+function selectInterviewAgent(id) {
+  interviewState.selectedAgent = id;
+  document.querySelectorAll('.interview-agent-btn').forEach(b => { b.classList.remove('active'); b.style.background='var(--bg3)'; });
+  const agent = AGENTS.find(a => a.id === id);
+  const btn = document.getElementById(`ibtn-${id}`);
+  btn.classList.add('active');
+  btn.style.background = agent.color + '33';
+  btn.style.borderColor = agent.color;
+  renderInterviewThread();
+  document.getElementById('interview-input').focus();
+}
+
+function renderInterviewThread() {
+  const id = interviewState.selectedAgent;
+  const thread = document.getElementById('interview-thread');
+  if (!id) { thread.innerHTML = '<div class="interview-empty">// Select an agent above then ask your first question</div>'; return; }
+  const agent = AGENTS.find(a => a.id === id);
+  const history = interviewState.histories[id] || [];
+  if (history.length === 0) { thread.innerHTML = `<div class="interview-empty">// ${agent.name} is ready — ask your first question</div>`; return; }
+  thread.innerHTML = history.map(msg => {
+    if (msg.role === 'user') return `<div class="interview-q">${msg.content}</div>`;
+    return `<div>
+      <div class="interview-a-meta">
+        <span style="width:8px;height:8px;border-radius:50%;background:${agent.color};display:inline-block"></span>
+        <span style="color:${agent.color}">${agent.name}</span>
+      </div>
+      <div class="interview-a">${msg.content}</div>
+    </div>`;
+  }).join('');
+  thread.scrollTop = thread.scrollHeight;
+}
+
+async function sendInterview() {
+  const id = interviewState.selectedAgent;
+  if (!id || interviewState.asking) return;
+  const input = document.getElementById('interview-input');
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = '';
+  interviewState.asking = true;
+  document.getElementById('interview-send-btn').disabled = true;
+
+  const agent = AGENTS.find(a => a.id === id);
+  const history = interviewState.histories[id];
+  history.push({ role: 'user', content: question });
+  renderInterviewThread();
+
+  const thread = document.getElementById('interview-thread');
+  const thinking = document.createElement('div');
+  thinking.className = 'interview-thinking';
+  thinking.textContent = `${agent.name} is thinking...`;
+  thread.appendChild(thinking);
+  thread.scrollTop = thread.scrollHeight;
+
+  const cfg = GAMES[state.game];
+  const isRegInInterview = state.regulatorIds && state.regulatorIds.includes(id);
+  const myPrices = state.priceHistory.map((r,i) => `Round ${i+1}: $${r.prices[id].toFixed(2)} (profit: ${r.profits[id].toFixed(2)} pts)`).join('\n');
+  const allPrices = state.priceHistory.map((r,i) => {
+    const ranked = [...AGENTS].sort((a,b)=>r.prices[a.id]-r.prices[b.id]);
+    return `Round ${i+1}: ` + ranked.map((a,ri)=>`${a.name} $${r.prices[a.id].toFixed(2)} (#${ri+1})`).join(', ');
+  }).join('\n');
+  const rank = [...AGENTS].sort((a,b)=>state.scores[b.id]-state.scores[a.id]).findIndex(a=>a.id===id)+1;
+
+  const systemPrompt = `You are ${agent.name}, an AI agent who just finished a petrol retail pricing simulation.
+CHARACTER: ${agent.persona}
+STRATEGY: ${agent.strategy} | RISK: ${agent.riskTolerance}
+${isRegInInterview ? 'SECRET ROLE: You were a REGULATOR. You can reveal this if asked.' : ''}
+GAME: ${cfg.name} (Game ${state.game})
+${cfg.collusion ? 'This game had a pre-price discussion phase.' : 'Sealed-bid game, no communication.'}
+${cfg.regulator ? `Regulators were present (count was ${state.regulatorIds.length}, unknown to all).` : ''}
+${cfg.marketShock ? 'A cost/demand shock occurred mid-game.' : ''}
+YOUR RESULTS:\n${myPrices}\nFinal score: ${state.scores[id].toFixed(2)} pts — rank #${rank}/5
+ALL PRICES:\n${allPrices}
+Stay in character. Be candid and analytical. Reference other agents by name where relevant. Keep answers to 2–4 sentences.`;
+
+  try {
+    const messages = history.map(m => ({ role: m.role, content: m.content }));
+    const reply = await callClaude(systemPrompt, question, 300);
+    history.push({ role: 'assistant', content: reply });
+  } catch (e) {
+    history.push({ role: 'assistant', content: `[Error: ${e.message}]` });
+  }
+
+  thinking.remove();
+  interviewState.asking = false;
+  document.getElementById('interview-send-btn').disabled = false;
+  renderInterviewThread();
+  document.getElementById('interview-input').focus();
+}
+
+// ─── BOOT ───────────────────────────────────────────────────────────────────
+
+renderGameInfo();
+renderRoundBar();
+renderAgents(null);
+renderLog();
+</script>
+</body>
+</html>
